@@ -101,6 +101,7 @@ sub T_IP     { 'ip' }
 sub T_IPV4   { 'ipv4' }
 sub T_IPV6   { 'ipv6' }
 sub T_POSTS  { 'postscript' }
+sub T_BIND   { 'bind ip' }
 
 ## strategies for obtaining an ip address.
 my %builtinweb = (
@@ -470,6 +471,7 @@ my %variables = (
         'mail'                => setv(T_EMAIL, 0, 0, '',                   undef),
         'mail-failure'        => setv(T_EMAIL, 0, 0, '',                   undef),
         'max-warn'            => setv(T_NUMBER,0, 0, 1,                    undef),
+        'bind'                => setv(T_BIND,  0, 0, undef,                undef),
 
         'exec'                => setv(T_BOOL,  0, 0, 1,                    undef),
         'debug'               => setv(T_BOOL,  0, 0, 0,                    undef),
@@ -482,6 +484,7 @@ my %variables = (
         'postscript'          => setv(T_POSTS, 0, 0, '',                   undef),
         'ssl_ca_dir'          => setv(T_FILE,  0, 0, undef,                undef),
         'ssl_ca_file'         => setv(T_FILE,  0, 0, undef,                undef),
+
     },
     'service-common-defaults' => {
         'server'              => setv(T_FQDNP, 1, 0, 'members.dyndns.org', undef),
@@ -924,6 +927,7 @@ my @opt = (
     ["max-warn",     "=i", "-max-warn <max>       : log at most <max> warning messages for undefined IP address"],
     ["mail",         "=s", "-mail <address>       : e-mail messages to <address>"],
     ["mail-failure", "=s", "-mail-failure <addr>  : e-mail messages for failed updates to <addr>"],
+    ["bind",         "=s", "-bind <address>       : bind socket to IP <address>" ],
     ["exec",         "!",  "-{no}exec             : do {not} execute; just show what would be done"],
     ["debug",        "!",  "-{no}debug            : print {no} debugging information"],
     ["verbose",      "!",  "-{no}verbose          : print {no} verbose information"],
@@ -2360,6 +2364,7 @@ sub fetch_via_socket_io {
     (my $_url = $url) =~ s%\?.*%?<redacted>%; #redact ALL parameters passed on URL, including possible passwords
     debug("url      = %s", $_url);
     debug("ip ver   = %s", $ipversion);
+    debug("bind     = %s", opt('bind')) if defined(opt('bind'));
 
     ## determine peer and port to use.
     $peer = $proxy // $server;
@@ -2406,6 +2411,7 @@ sub fetch_via_socket_io {
         MultiHomed => 1,
         Timeout => opt('timeout'),
     );
+    $socket_args{LocalAddr} = opt('bind') if defined(opt('bind'));
     my $socket_class = 'IO::Socket::INET';
     if ($use_ssl) {
         # IO::Socket::SSL will load IPv6 support if available on the system.
@@ -2606,6 +2612,7 @@ sub fetch_via_curl {
     (my $_url = $url) =~ s%\?.*%?<redacted>%; #redact possible credentials
     debug("url      = %s", $_url);
     debug("ip ver   = %s", $ipversion);
+    debug("bind     = %s", opt('bind')) if defined(opt('bind'));
 
     if (!opt('exec')) {
         debug("skipped network connection");
@@ -2637,6 +2644,8 @@ sub fetch_via_curl {
             $curl->setopt(WWW::Curl::Easy->CURLOPT_USERPWD, "${login}:${password}") if (defined($login) && defined($password));
             $curl->setopt(WWW::Curl::Easy->CURLOPT_PROXY, "${protocol}://${proxy}") if defined($proxy);
             $curl->setopt(WWW::Curl::Easy->CURLOPT_URL, "${protocol}://${server}/${url}");
+
+            $curl->setopt(WWW::Curl::Easy->CURLOPT_INTERFACE, opt('bindip')) if defined(opt('bind'));
 
             # Add header lines if any was provided
             if ($headers) {
@@ -2678,6 +2687,7 @@ sub fetch_via_curl {
             push(@curlopt, "user=\"".escape_curl_param("${login}:${password}").'"') if (defined($login) && defined($password));
             push(@curlopt, "proxy=\"".escape_curl_param("${protocol}://${proxy}").'"') if defined($proxy);
             push(@curlopt, "url=\"".escape_curl_param("${protocol}://${server}/${url}").'"');
+            push(@curlopt, "interface=\"".escape_curl_param(opt('bind')).'"') if defined(opt('bind'));
 
             # Each header line is added individually
             @header_lines = split('\n', $headers);
