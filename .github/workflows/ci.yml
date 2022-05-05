@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - bind_ip
   pull_request:
     branches:
-      - master
+      - bind_ip
   workflow_dispatch:
 
 jobs:
